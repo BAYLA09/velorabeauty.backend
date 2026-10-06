@@ -1,0 +1,194 @@
+{
+  "apiVersion": "1.0",
+  "baseUrl": "https://YOUR_BACKEND_HOST/api/agent",
+  "authentication": {
+    "type": "bearer",
+    "header": "Authorization",
+    "valueFormat": "Bearer ${GROK_AGENT_API_KEY}",
+    "notes": "Grok must never receive DATABASE_URL, STORE_API_KEY, or EMAIL_API_KEY"
+  },
+  "tools": [
+    {
+      "name": "get_customer",
+      "description": "Fetch safe Customer 360 profile by id or URL-encoded email",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}",
+      "parameters": { "emailOrId": { "type": "string", "required": true } },
+      "response": { "customer": "object" },
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_context",
+      "description": "Full context: lifecycle, segments, timeline, orders, checkouts, emails, tickets, engagement",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/context",
+      "parameters": { "emailOrId": { "type": "string", "required": true } },
+      "response": { "customer": "object", "timeline": "array", "emailHistory": "array" },
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_timeline",
+      "description": "Behavioral CustomerEvent timeline",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/timeline",
+      "parameters": { "emailOrId": { "type": "string", "required": true } },
+      "response": { "timeline": "array" },
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_orders",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/orders",
+      "description": "Order history",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_checkouts",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/checkouts",
+      "description": "Checkout history",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_email_history",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/emails",
+      "description": "Inbound/outbound email history",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "search_customers",
+      "method": "GET",
+      "endpoint": "/customers/search?q={query}",
+      "description": "Search by email or name",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_segments",
+      "method": "GET",
+      "endpoint": "/customers/{emailOrId}/segments",
+      "description": "Computed segment slugs for one customer",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_customer_segments_catalog",
+      "method": "GET",
+      "endpoint": "/segments",
+      "description": "List available segment definitions",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "list_customers_by_segment",
+      "method": "GET",
+      "endpoint": "/segments/{slug}/customers",
+      "description": "Customers matching a segment slug",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "get_abandoned_checkouts",
+      "method": "GET",
+      "endpoint": "/checkouts/abandoned",
+      "description": "Eligibility-filtered abandoned carts with sequence hint",
+      "safety": ["read-only", "backend-filters-ineligible"]
+    },
+    {
+      "name": "get_campaign",
+      "method": "GET",
+      "endpoint": "/campaigns/{id}",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "create_campaign",
+      "method": "POST",
+      "endpoint": "/campaigns",
+      "body": { "name": "string", "type": "EmailCampaignType", "targetSegment": "string?", "experimentId": "string?" },
+      "safety": ["creates-DRAFT-only"]
+    },
+    {
+      "name": "activate_campaign",
+      "method": "POST",
+      "endpoint": "/campaigns/{id}/activate",
+      "description": "Explicit activation required before campaignId can be used on send",
+      "safety": ["admin-equivalent-activation"]
+    },
+    {
+      "name": "get_campaign_metrics",
+      "method": "GET",
+      "endpoint": "/metrics/campaigns/{id}",
+      "safety": ["read-only", "revenueAttributed-may-be-null"]
+    },
+    {
+      "name": "get_email_metrics",
+      "method": "GET",
+      "endpoint": "/metrics/email?days=30",
+      "safety": ["read-only"]
+    },
+    {
+      "name": "check_email_eligibility",
+      "method": "POST",
+      "endpoint": "/email/check-eligibility",
+      "body": {
+        "customerId": "string",
+        "recipientEmail": "string",
+        "type": "EmailType",
+        "checkoutId": "string?",
+        "campaignId": "string?"
+      },
+      "safety": ["required-before-marketing-send"]
+    },
+    {
+      "name": "send_email",
+      "method": "POST",
+      "endpoint": "/email/send",
+      "body": {
+        "customerId": "string",
+        "recipientEmail": "string",
+        "subject": "string",
+        "body": "string",
+        "type": "EmailType",
+        "checkoutId": "string?",
+        "campaignId": "string?",
+        "variant": "string?",
+        "experimentId": "string?",
+        "aiConfidence": "number?",
+        "generationReason": "string?"
+      },
+      "safety": ["consent", "unsubscribe", "frequency", "duplicate", "campaign-active", "no-direct-provider-access"]
+    },
+    {
+      "name": "create_support_ticket",
+      "method": "POST",
+      "endpoint": "/support/tickets",
+      "body": { "customerId": "string", "subject": "string", "message": "string", "category": "SupportCategory?" }
+    },
+    {
+      "name": "get_support_ticket",
+      "method": "GET",
+      "endpoint": "/support/tickets/{id}"
+    },
+    {
+      "name": "reply_to_customer",
+      "method": "POST",
+      "endpoint": "/support/reply",
+      "body": { "customerId": "string", "ticketId": "string", "recipientEmail": "string", "subject": "string", "body": "string", "aiConfidence": "number?" },
+      "safety": ["escalates-sensitive-to-human", "no-auto-refund"]
+    },
+    {
+      "name": "mark_human_required",
+      "method": "POST",
+      "endpoint": "/support/tickets/{id}/human-required",
+      "body": { "reason": "string?" }
+    },
+    {
+      "name": "record_customer_event",
+      "method": "POST",
+      "endpoint": "/events",
+      "body": { "customerId": "string", "type": "CustomerEventType", "metadata": "object?" },
+      "safety": ["no-secrets-in-metadata"]
+    }
+  ],
+  "integrationOptions": {
+    "optionA": "Secure REST Agent API (recommended)",
+    "optionB": "Custom MCP connector wrapping the same REST endpoints without PostgreSQL"
+  }
+}

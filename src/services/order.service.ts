@@ -1,7 +1,9 @@
-import { CheckoutStatus } from "@prisma/client";
+import { CheckoutStatus, CustomerEventType } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { upsertCustomer } from "./customer.service.js";
+import { refreshCustomerStats } from "./customer-stats.service.js";
+import { recordCustomerEvent } from "./customer-event.service.js";
 
 export type CreateOrderInput = {
   email: string;
@@ -66,6 +68,17 @@ export async function createOrder(input: CreateOrderInput) {
       },
     });
   }
+
+  const eventType =
+    input.status.toLowerCase() === "paid"
+      ? CustomerEventType.ORDER_PAID
+      : CustomerEventType.ORDER_CREATED;
+  await recordCustomerEvent({
+    customerId: customer.id,
+    type: eventType,
+    metadata: { externalOrderId: order.externalOrderId, totalAmount: input.totalAmount },
+  });
+  await refreshCustomerStats(customer.id);
 
   return order;
 }

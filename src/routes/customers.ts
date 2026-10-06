@@ -11,6 +11,7 @@ const customerBodySchema = z.object({
   lastName: z.string().optional(),
   phone: z.string().optional(),
   country: z.string().optional(),
+  language: z.string().optional(),
   marketingConsent: z.boolean().optional(),
 });
 

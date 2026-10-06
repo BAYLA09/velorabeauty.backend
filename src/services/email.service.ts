@@ -1,5 +1,4 @@
 import {
-  CheckoutStatus,
   EmailDirection,
   EmailStatus,
   EmailType,
@@ -10,10 +9,12 @@ import { HttpError } from "../middleware/errorHandler.js";
 import { isValidEmail, normalizeEmail } from "../lib/email-normalize.js";
 import { loadEnv } from "../config/env.js";
 import { getCustomerById } from "./customer.service.js";
-import { sendViaProvider } from "./email-provider.service.js";
+import { emailProvider } from "../email/email-provider.js";
 import { logAiInteraction } from "./ai-audit.service.js";
-
-const MARKETING_TYPES: EmailType[] = [EmailType.ABANDONED_CHECKOUT, EmailType.FOLLOW_UP];
+import { checkEmailEligibility } from "./eligibility.service.js";
+import { recordCustomerEvent } from "./customer-event.service.js";
+import { logStructured } from "../lib/logger.js";
+import { isMarketingEmailType } from "../lib/email-rules.js";
 
 export type AgentSendEmailInput = {
   customerId: string;
@@ -22,7 +23,13 @@ export type AgentSendEmailInput = {
   body: string;
   type: EmailType;
   checkoutId?: string;
+  campaignId?: string;
   model?: string;
+  aiGenerated?: boolean;
+  aiConfidence?: number;
+  generationReason?: string;
+  variant?: string;
+  experimentId?: string;
 };
 
 export type AgentSendEmailResult = {
@@ -65,80 +72,28 @@ export async function validateAndSendAgentEmail(
     };
   }
 
-  if (customer.unsubscribed && MARKETING_TYPES.includes(input.type)) {
-    return {
-      success: false,
-      reason: "Customer has unsubscribed from marketing emails",
-      code: "CUSTOMER_UNSUBSCRIBED",
-    };
-  }
-
-  if (MARKETING_TYPES.includes(input.type) && !customer.marketingConsent) {
-    return {
-      success: false,
-      reason: "Marketing consent is required for this email type",
-      code: "MARKETING_CONSENT_REQUIRED",
-    };
-  }
-
-  if (input.type === EmailType.ABANDONED_CHECKOUT) {
-    if (!input.checkoutId) {
-      return {
-        success: false,
-        reason: "checkoutId is required for abandoned checkout emails",
-        code: "CHECKOUT_ID_REQUIRED",
-      };
-    }
-    const checkout = await prisma.checkout.findFirst({
-      where: { id: input.checkoutId, customerId: customer.id },
-    });
-    if (!checkout) {
-      return { success: false, reason: "Checkout not found for customer", code: "CHECKOUT_NOT_FOUND" };
-    }
-    if (checkout.status !== CheckoutStatus.ABANDONED) {
-      return {
-        success: false,
-        reason: "Checkout is not eligible for abandoned checkout messaging",
-        code: "CHECKOUT_NOT_ABANDONED",
-      };
-    }
-  }
-
-  if (input.checkoutId && input.type !== EmailType.ABANDONED_CHECKOUT) {
-    const checkout = await prisma.checkout.findFirst({
-      where: { id: input.checkoutId, customerId: customer.id },
-    });
-    if (!checkout) {
-      return { success: false, reason: "Checkout not found for customer", code: "CHECKOUT_NOT_FOUND" };
-    }
-    if (checkout.status === CheckoutStatus.RECOVERED) {
-      return {
-        success: false,
-        reason: "Checkout has been recovered; marketing is no longer allowed",
-        code: "CHECKOUT_RECOVERED",
-      };
-    }
-  }
-
-  const duplicate = await findDuplicateOutboundEmail({
+  const eligibility = await checkEmailEligibility({
     customerId: customer.id,
+    recipientEmail,
     type: input.type,
-    subject: input.subject.trim(),
-    body: input.body.trim(),
     checkoutId: input.checkoutId,
+    campaignId: input.campaignId,
   });
-  if (duplicate) {
-    return {
-      success: false,
-      reason: "An equivalent email was already sent recently",
-      code: "DUPLICATE_EMAIL",
-    };
+
+  if (!eligibility.eligible) {
+    logStructured("info", "email_send_blocked", {
+      customerId: customer.id,
+      code: eligibility.code,
+      type: input.type,
+    });
+    return { success: false, reason: eligibility.reason, code: eligibility.code };
   }
 
   const env = loadEnv();
   const queued = await prisma.emailMessage.create({
     data: {
       customerId: customer.id,
+      campaignId: input.campaignId,
       checkoutId: input.checkoutId,
       direction: EmailDirection.OUTBOUND,
       type: input.type,
@@ -147,16 +102,23 @@ export async function validateAndSendAgentEmail(
       subject: input.subject.trim(),
       body: input.body.trim(),
       status: EmailStatus.QUEUED,
+      aiGenerated: input.aiGenerated ?? true,
+      aiModel: input.model,
+      aiConfidence: input.aiConfidence,
+      generationReason: input.generationReason,
+      variant: input.variant,
+      experimentId: input.experimentId,
     },
   });
 
   try {
-    const sent = await sendViaProvider({
+    const sent = await emailProvider.send({
       to: recipientEmail,
       from: env.EMAIL_FROM,
       replyTo: env.EMAIL_REPLY_TO,
       subject: input.subject.trim(),
       body: input.body.trim(),
+      unsubscribeUrl: isMarketingEmailType(input.type) ? env.EMAIL_UNSUBSCRIBE_URL : undefined,
     });
 
     const emailMessage = await prisma.emailMessage.update({
@@ -165,6 +127,17 @@ export async function validateAndSendAgentEmail(
         status: EmailStatus.SENT,
         providerMessageId: sent.providerMessageId,
         sentAt: new Date(),
+      },
+    });
+
+    await recordCustomerEvent({
+      customerId: customer.id,
+      type: "EMAIL_SENT",
+      metadata: {
+        emailMessageId: emailMessage.id,
+        type: input.type,
+        campaignId: input.campaignId,
+        checkoutId: input.checkoutId,
       },
     });
 
@@ -177,6 +150,7 @@ export async function validateAndSendAgentEmail(
         subject: input.subject.trim(),
         type: input.type,
         checkoutId: input.checkoutId,
+        campaignId: input.campaignId,
       },
       output: {
         success: true,
@@ -186,42 +160,24 @@ export async function validateAndSendAgentEmail(
       model: input.model,
     });
 
+    logStructured("info", "email_send_success", {
+      customerId: customer.id,
+      emailMessageId: emailMessage.id,
+      type: input.type,
+    });
+
     return { success: true, emailMessage, providerMessageId: sent.providerMessageId };
   } catch (err) {
     await prisma.emailMessage.update({
       where: { id: queued.id },
       data: { status: EmailStatus.FAILED },
     });
+    logStructured("error", "email_send_failed", { customerId: customer.id, emailMessageId: queued.id });
     if (err instanceof HttpError) {
       return { success: false, reason: err.message, code: err.code ?? "EMAIL_SEND_FAILED" };
     }
     return { success: false, reason: "Failed to send email", code: "EMAIL_SEND_FAILED" };
   }
-}
-
-async function findDuplicateOutboundEmail(params: {
-  customerId: string;
-  type: EmailType;
-  subject: string;
-  body: string;
-  checkoutId?: string;
-}): Promise<EmailMessage | null> {
-  const windowStart = new Date(
-    Date.now() - loadEnv().DUPLICATE_EMAIL_WINDOW_MINUTES * 60_000,
-  );
-
-  return prisma.emailMessage.findFirst({
-    where: {
-      customerId: params.customerId,
-      direction: EmailDirection.OUTBOUND,
-      type: params.type,
-      subject: params.subject,
-      body: params.body,
-      checkoutId: params.checkoutId ?? null,
-      createdAt: { gte: windowStart },
-      status: { in: [EmailStatus.QUEUED, EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.OPENED, EmailStatus.CLICKED] },
-    },
-  });
 }
 
 export async function recordInboundEmail(params: {
@@ -256,6 +212,7 @@ export async function recordInboundEmail(params: {
       providerMessageId: params.providerMessageId,
       status: EmailStatus.DELIVERED,
       deliveredAt: new Date(),
+      aiGenerated: false,
     },
   });
 

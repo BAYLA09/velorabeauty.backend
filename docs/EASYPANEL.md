@@ -1,93 +1,73 @@
-# EasyPanel deployment
-
-Deploy the **backend** service from this repository (`main` branch). PostgreSQL runs as a separate EasyPanel service. **Never** put real secrets in GitHub — set them in **backend → Environment**.
+# EasyPanel — Velora Beauty backend
 
 ## Services
 
-| Service | Purpose |
+| Service | Role |
 | --- | --- |
-| **database** | PostgreSQL |
-| **backend** | This API (Dockerfile in repo root) |
-| **frontend** | Your storefront (separate repo/service) |
+| **database** | PostgreSQL (persistent memory) |
+| **backend** | This API (Dockerfile) |
+| **frontend** | Storefront (separate) |
 
-## Required environment variables (backend)
+## Deploy
 
-Copy these into **velorabeauty → backend → Environment**. Generate unique random values for API keys (32+ characters).
+1. GitHub repo → **backend** service, branch **`main`**
+2. Add environment variables below
+3. Deploy → container runs `prisma migrate deploy` then starts API
+4. Map domain + **HTTPS** (required for production webhooks and trust)
+5. Health: `GET https://YOUR_HOST/health`
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | Internal Postgres URL from EasyPanel database service |
-| `STORE_API_KEY` | Yes | Authenticates store/webhook routes (`/api/customers`, `/api/checkouts`, …) |
-| `GROK_AGENT_API_KEY` | Yes | Authenticates Grok-only routes (`/api/agent/*`) — **give this to Grok, not the DB URL** |
-| `EMAIL_PROVIDER` | Yes | `console` (no delivery) or `sendgrid` (production) |
-| `EMAIL_API_KEY` | If SendGrid | SendGrid API key with Mail Send permission |
-| `EMAIL_FROM` | Yes | Verified sender address (e.g. your Gmail until domain is ready) |
-| `EMAIL_REPLY_TO` | Yes | Reply-to address (often same as `EMAIL_FROM`) |
-| `NODE_ENV` | Recommended | `production` |
-| `PORT` | Optional | Default `3000` (match EasyPanel port mapping) |
+## Required environment variables
 
-### Example values (templates — replace secrets in EasyPanel)
+Set in **backend → Environment** (never commit real values):
 
 ```env
 NODE_ENV=production
 PORT=3000
 
-DATABASE_URL=postgresql://USER:PASSWORD@velorabeauty_database:5432/velorabeauty?schema=public
+DATABASE_URL=<internal-postgres-url-from-easypanel>
 
-STORE_API_KEY=<generate-long-random-string>
-GROK_AGENT_API_KEY=<generate-different-long-random-string>
+STORE_API_KEY=<long-random-string>
+GROK_AGENT_API_KEY=<different-long-random-string>
 
 EMAIL_PROVIDER=sendgrid
-EMAIL_API_KEY=<your-sendgrid-api-key>
+EMAIL_API_KEY=<sendgrid-api-key>
 EMAIL_FROM=beautyvelora038@gmail.com
 EMAIL_REPLY_TO=beautyvelora038@gmail.com
+EMAIL_UNSUBSCRIBE_URL=https://YOUR_HOST/api/unsubscribe
+
+MAX_MARKETING_EMAILS_PER_7_DAYS=3
+ABANDONED_CHECKOUT_DELAY_MINUTES=30
+WINBACK_DAYS=60
 ```
 
-Use the **internal** hostname EasyPanel provides for Postgres (not a public IP) in `DATABASE_URL`.
+Optional: `ABANDONED_CHECKOUT_MESSAGE2_HOURS`, `ABANDONED_CHECKOUT_MESSAGE3_HOURS`, `VIP_MIN_TOTAL_SPENT`, rate limits — see `.env.example`.
 
-## SendGrid setup
+## What Grok receives
 
-1. Create a SendGrid account and API key with **Mail Send** scope → set as `EMAIL_API_KEY`.
-2. **Verify a sender** matching `EMAIL_FROM`:
-   - For Gmail, use [Single Sender Verification](https://docs.sendgrid.com/ui/sending-email/sender-verification) for `beautyvelora038@gmail.com`, **or**
-   - Later: domain authentication for `support@yourdomain.com` and update `EMAIL_FROM` / `EMAIL_REPLY_TO` in EasyPanel only.
-3. Set `EMAIL_PROVIDER=sendgrid` and redeploy.
-4. If SendGrid rejects mail, check backend logs; failed sends are stored as `FAILED` in the database, not `SENT`.
-
-## Local / staging without SendGrid
-
-Set `EMAIL_PROVIDER=console` — emails are logged only (safe for testing logic and `EMAIL_MESSAGES` records).
-
-## Deploy steps
-
-1. Connect GitHub repo to **backend** service, branch `main`.
-2. Add all environment variables above.
-3. Deploy; container runs `prisma migrate deploy` then starts the API.
-4. Verify: `GET https://<your-backend-host>/health` → `{ "status": "ok", "database": "connected" }`.
-
-## What Grok receives vs what stays on the server
-
-| Give to Grok | Keep on server only |
+| Provide to Grok | Never give Grok |
 | --- | --- |
-| Public backend URL | `DATABASE_URL` |
+| `https://YOUR_HOST/api/agent` | `DATABASE_URL` |
 | `GROK_AGENT_API_KEY` | `STORE_API_KEY`, `EMAIL_API_KEY` |
 
-## Optional tuning
+## Webhooks
 
-```env
-AGENT_EMAIL_RATE_LIMIT_WINDOW_MS=60000
-AGENT_EMAIL_RATE_LIMIT_MAX=30
-DUPLICATE_EMAIL_WINDOW_MINUTES=60
-ABANDONED_CHECKOUT_MIN_AGE_MINUTES=60
-ABANDONED_CHECKOUT_COOLDOWN_HOURS=24
-```
+| Source | Target | Auth |
+| --- | --- | --- |
+| Store / ESP inbound mail | `POST /api/support/inbound` | Bearer `STORE_API_KEY` |
+| Deploy trigger | EasyPanel deploy URL | EasyPanel token |
 
-## Troubleshooting
+## Migrations
 
-| Symptom | Check |
-| --- | --- |
-| Build fails on Prisma | Latest `main` includes Dockerfile fixes (schema copied before `npm ci`) |
-| Container exits on start | Missing/invalid env vars; view runtime logs |
-| Grok gets 401 | Wrong or missing `Authorization: Bearer` header |
-| Email 422 | Consent, unsubscribe, checkout state, or duplicate rules — read `reason` / `code` |
-| SendGrid 502 | Sender not verified or invalid `EMAIL_API_KEY` |
+New releases apply SQL via `prisma migrate deploy` on container start. Ensure **one** Postgres instance and correct `DATABASE_URL`.
+
+## Admin (owner only)
+
+Routes under `/api/admin/*` use **`STORE_API_KEY`** — pause marketing, view failures, unsubscribes. Grok agent key **cannot** access these.
+
+## SendGrid
+
+Verify sender matching `EMAIL_FROM` before production sends. See [EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md).
+
+## MCP (optional)
+
+Same REST API can be wrapped in a custom MCP server later; PostgreSQL stays on the backend only. See [GROK_AGENT.md](./GROK_AGENT.md).

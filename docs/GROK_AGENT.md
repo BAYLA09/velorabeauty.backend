@@ -2,6 +2,42 @@
 
 Grok manages **what** to write and **when** to respond. This backend manages **data**, **rules**, **history**, and **delivery**. Grok must **never** receive `DATABASE_URL` or direct PostgreSQL access.
 
+**Machine-readable tools:** [GROK_TOOL_MANIFEST.json](./GROK_TOOL_MANIFEST.json)  
+**System prompt:** [GROK_SYSTEM_PROMPT.md](./GROK_SYSTEM_PROMPT.md)
+
+### Customer 360 & intelligence endpoints (summary)
+
+| Tool name | Method | Path |
+| --- | --- | --- |
+| get_customer | GET | `/customers/:emailOrId` |
+| get_customer_context | GET | `/customers/:emailOrId/context` |
+| get_customer_timeline | GET | `/customers/:emailOrId/timeline` |
+| get_customer_orders | GET | `/customers/:emailOrId/orders` |
+| get_customer_checkouts | GET | `/customers/:emailOrId/checkouts` |
+| get_customer_email_history | GET | `/customers/:emailOrId/emails` |
+| search_customers | GET | `/customers/search?q=` |
+| get_customer_segments | GET | `/customers/:emailOrId/segments` |
+| list segments | GET | `/segments` |
+| customers by segment | GET | `/segments/:slug/customers` |
+| get_abandoned_checkouts | GET | `/checkouts/abandoned` |
+| check_email_eligibility | POST | `/email/check-eligibility` |
+| send_email | POST | `/email/send` |
+| get_email_metrics | GET | `/metrics/email` |
+| get_campaign | GET | `/campaigns/:id` |
+| create_campaign | POST | `/campaigns` |
+| activate_campaign | POST | `/campaigns/:id/activate` |
+| get_campaign_metrics | GET | `/metrics/campaigns/:id` |
+| create_support_ticket | POST | `/support/tickets` |
+| get_support_ticket | GET | `/support/tickets/:id` |
+| reply_to_customer | POST | `/support/reply` |
+| mark_human_required | POST | `/support/tickets/:id/human-required` |
+| record_customer_event | POST | `/events` |
+
+### MCP vs REST
+
+- **Option A (default):** HTTPS REST + Bearer `GROK_AGENT_API_KEY`
+- **Option B:** Custom MCP connector exposing the same operations — PostgreSQL remains on the backend only
+
 ## Architecture
 
 ```text

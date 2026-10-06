@@ -1,10 +1,11 @@
-import { EmailType, SupportTicketStatus } from "@prisma/client";
+import { EmailType, SupportCategory, SupportTicketStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { requiresHumanReview } from "../lib/sensitive-topics.js";
 import { recordInboundEmail, validateAndSendAgentEmail } from "./email.service.js";
 import { getCustomerById } from "./customer.service.js";
 import { logAiInteraction } from "./ai-audit.service.js";
+import { recordCustomerEvent } from "./customer-event.service.js";
 
 export async function handleInboundSupportEmail(params: {
   senderEmail: string;
@@ -48,7 +49,53 @@ export async function handleInboundSupportEmail(params: {
     });
   }
 
+  await recordCustomerEvent({
+    customerId: customer.id,
+    type: "SUPPORT_MESSAGE",
+    metadata: { ticketId: ticket.id, messageId: message.id },
+  });
+
   return { customer, message, ticket };
+}
+
+export async function createSupportTicket(params: {
+  customerId: string;
+  subject: string;
+  message: string;
+  category?: SupportCategory;
+}) {
+  const customer = await getCustomerById(params.customerId);
+  const humanRequired = requiresHumanReview(`${params.subject}\n${params.message}`);
+  const ticket = await prisma.supportTicket.create({
+    data: {
+      customerId: customer.id,
+      email: customer.email,
+      subject: params.subject,
+      originalMessage: params.message,
+      category: params.category ?? SupportCategory.OTHER,
+      humanRequired,
+      status: humanRequired ? SupportTicketStatus.HUMAN_REQUIRED : SupportTicketStatus.OPEN,
+    },
+  });
+  return ticket;
+}
+
+export async function getSupportTicket(ticketId: string) {
+  const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
+  if (!ticket) throw new HttpError(404, "Support ticket not found", "TICKET_NOT_FOUND");
+  return ticket;
+}
+
+export async function markTicketHumanRequired(ticketId: string, reason?: string) {
+  const ticket = await getSupportTicket(ticketId);
+  return prisma.supportTicket.update({
+    where: { id: ticket.id },
+    data: {
+      humanRequired: true,
+      status: SupportTicketStatus.HUMAN_REQUIRED,
+      aiResponse: reason ?? ticket.aiResponse,
+    },
+  });
 }
 
 export async function agentSupportReply(params: {
@@ -136,6 +183,12 @@ export async function agentSupportReply(params: {
       aiConfidence: params.aiConfidence,
       status: SupportTicketStatus.AI_HANDLED,
     },
+  });
+
+  await recordCustomerEvent({
+    customerId: customer.id,
+    type: "SUPPORT_REPLY",
+    metadata: { ticketId: ticket.id, emailMessageId: sendResult.emailMessage.id },
   });
 
   return {

@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-/** Map legacy env names without requiring code changes in deployment configs. */
 function applyLegacyEnvAliases(): void {
   if (!process.env.EMAIL_FROM && process.env.FROM_EMAIL) {
     process.env.EMAIL_FROM = process.env.FROM_EMAIL;
@@ -18,12 +17,21 @@ const envSchema = z.object({
   STORE_API_KEY: z.string().min(16),
   EMAIL_FROM: z.string().email(),
   EMAIL_REPLY_TO: z.string().email(),
+  EMAIL_UNSUBSCRIBE_URL: z.string().url().optional(),
   EMAIL_PROVIDER: z.enum(["console", "sendgrid"]).default("console"),
   EMAIL_API_KEY: z.string().optional(),
+  MAX_MARKETING_EMAILS_PER_7_DAYS: z.coerce.number().int().positive().default(3),
+  ABANDONED_CHECKOUT_DELAY_MINUTES: z.coerce.number().int().positive().default(30),
+  ABANDONED_CHECKOUT_MESSAGE2_HOURS: z.coerce.number().int().positive().default(24),
+  ABANDONED_CHECKOUT_MESSAGE3_HOURS: z.coerce.number().int().positive().default(48),
+  WINBACK_DAYS: z.coerce.number().int().positive().default(60),
+  VIP_MIN_TOTAL_SPENT: z.coerce.number().nonnegative().default(500),
+  VIP_MIN_ORDERS: z.coerce.number().int().positive().default(5),
+  INACTIVE_DAYS: z.coerce.number().int().positive().default(90),
   AGENT_EMAIL_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   AGENT_EMAIL_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
   DUPLICATE_EMAIL_WINDOW_MINUTES: z.coerce.number().int().positive().default(60),
-  ABANDONED_CHECKOUT_MIN_AGE_MINUTES: z.coerce.number().int().positive().default(60),
+  ABANDONED_CHECKOUT_MIN_AGE_MINUTES: z.coerce.number().int().positive().default(30),
   ABANDONED_CHECKOUT_COOLDOWN_HOURS: z.coerce.number().int().positive().default(24),
 });
 
@@ -44,4 +52,9 @@ export function loadEnv(): Env {
   }
   cached = parsed.data;
   return cached;
+}
+
+/** Reset cache for tests */
+export function resetEnvCache(): void {
+  cached = null;
 }

@@ -8,6 +8,7 @@ import { ordersRouter } from "./routes/orders.js";
 import { supportRouter } from "./routes/support.js";
 import { unsubscribeRouter } from "./routes/unsubscribe.js";
 import { agentRouter } from "./routes/agent/index.js";
+import { adminRouter } from "./routes/admin/index.js";
 
 export function createApp() {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp() {
   app.use("/api/support", supportRouter);
   app.use("/api/unsubscribe", unsubscribeRouter);
   app.use("/api/agent", agentRouter);
+  app.use("/api/admin", adminRouter);
 
   app.use(errorHandler);
   return app;
