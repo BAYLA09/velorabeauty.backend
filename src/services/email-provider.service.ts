@@ -4,6 +4,7 @@ import { HttpError } from "../middleware/errorHandler.js";
 export type SendEmailParams = {
   to: string;
   from: string;
+  replyTo: string;
   subject: string;
   body: string;
 };
@@ -19,6 +20,7 @@ export async function sendViaProvider(params: SendEmailParams): Promise<SendEmai
     console.info("[email:console]", {
       to: params.to,
       from: params.from,
+      replyTo: params.replyTo,
       subject: params.subject,
       bodyLength: params.body.length,
     });
@@ -29,12 +31,13 @@ export async function sendViaProvider(params: SendEmailParams): Promise<SendEmai
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+        Authorization: `Bearer ${env.EMAIL_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         personalizations: [{ to: [{ email: params.to }] }],
         from: { email: params.from },
+        reply_to: { email: params.replyTo },
         subject: params.subject,
         content: [{ type: "text/plain", value: params.body }],
       }),

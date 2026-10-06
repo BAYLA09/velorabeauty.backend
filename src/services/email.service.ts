@@ -143,7 +143,7 @@ export async function validateAndSendAgentEmail(
       direction: EmailDirection.OUTBOUND,
       type: input.type,
       recipientEmail,
-      senderEmail: env.FROM_EMAIL,
+      senderEmail: env.EMAIL_FROM,
       subject: input.subject.trim(),
       body: input.body.trim(),
       status: EmailStatus.QUEUED,
@@ -153,7 +153,8 @@ export async function validateAndSendAgentEmail(
   try {
     const sent = await sendViaProvider({
       to: recipientEmail,
-      from: env.FROM_EMAIL,
+      from: env.EMAIL_FROM,
+      replyTo: env.EMAIL_REPLY_TO,
       subject: input.subject.trim(),
       body: input.body.trim(),
     });

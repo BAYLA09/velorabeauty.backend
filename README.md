@@ -12,7 +12,7 @@ Production backend for Velora Beauty ecommerce: PostgreSQL persistence, store AP
 | **GitHub** | Source + config templates only (**no customer data**) |
 | **EasyPanel** | Deploy API + managed PostgreSQL |
 
-Grok authenticates with `Authorization: Bearer <GROK_AGENT_API_KEY>` on `/api/agent/*` routes only.
+Grok authenticates with `Authorization: Bearer <GROK_AGENT_API_KEY>` on `/api/agent/*` routes only. See [docs/GROK_AGENT.md](docs/GROK_AGENT.md).
 
 ## Quick start (local)
 
@@ -67,7 +67,7 @@ Outbound agent emails are blocked unless: valid recipient, customer exists, reci
 
 1. Create a PostgreSQL service and set `DATABASE_URL` on the API service (secrets in EasyPanel only).
 2. Deploy from this repo using the included `Dockerfile`.
-3. Set `STORE_API_KEY`, `GROK_AGENT_API_KEY`, `FROM_EMAIL`, and email provider env vars.
+3. Set env vars per [docs/EASYPANEL.md](docs/EASYPANEL.md) (`EMAIL_FROM`, `EMAIL_REPLY_TO`, `EMAIL_API_KEY`, API keys).
 4. On boot, the container runs `prisma migrate deploy` then starts the API.
 
 ## Security notes

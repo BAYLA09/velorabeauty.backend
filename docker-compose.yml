@@ -19,7 +19,8 @@ services:
       DATABASE_URL: postgresql://velora:velora_dev_password@postgres:5432/velorabeauty?schema=public
       STORE_API_KEY: local-dev-store-api-key-32chars
       GROK_AGENT_API_KEY: local-dev-grok-agent-key-32chars
-      FROM_EMAIL: dev@localhost
+      EMAIL_FROM: dev@localhost
+      EMAIL_REPLY_TO: dev@localhost
       EMAIL_PROVIDER: console
     depends_on:
       - postgres
