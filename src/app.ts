@@ -1,6 +1,7 @@
 import express from "express";
 import helmet from "helmet";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { rootRouter } from "./routes/root.js";
 import { healthRouter } from "./routes/health.js";
 import { customersRouter } from "./routes/customers.js";
 import { checkoutsRouter } from "./routes/checkouts.js";
@@ -16,7 +17,16 @@ export function createApp() {
   app.use(helmet());
   app.use(express.json({ limit: "1mb" }));
 
+  app.use(rootRouter);
   app.use(healthRouter);
+
+  app.use((_req, res) => {
+    res.status(404).json({
+      error: "Not found",
+      code: "NOT_FOUND",
+      hint: "Try GET / or GET /health",
+    });
+  });
   app.use("/api/customers", customersRouter);
   app.use("/api/checkouts", checkoutsRouter);
   app.use("/api/orders", ordersRouter);
