@@ -10,8 +10,15 @@ const SERVICE = {
   docs: "https://github.com/BAYLA09/velorabeauty.backend",
 };
 
+function publicBaseUrl(req: { protocol: string; get(name: string): string | undefined }): string {
+  const forwarded = req.get("x-forwarded-proto");
+  const protocol = forwarded?.split(",")[0]?.trim() || req.protocol;
+  return `${protocol}://${req.get("host")}`;
+}
+
 rootRouter.get("/", (req, res) => {
   const acceptsHtml = req.headers.accept?.includes("text/html");
+  const agentBaseUrl = `${publicBaseUrl(req)}/api/agent`;
 
   if (acceptsHtml) {
     res.type("html").send(`<!DOCTYPE html>
@@ -36,7 +43,7 @@ rootRouter.get("/", (req, res) => {
     <li><code>/api/agent</code> — Grok agent API (Bearer token required)</li>
     <li><code>/api/customers</code> — store API (Bearer token required)</li>
   </ul>
-  <p><small>Configure Grok with base URL: <code>${req.protocol}://${req.get("host")}/api/agent</code></small></p>
+  <p><small>Configure Grok with base URL: <code>${agentBaseUrl}</code></small></p>
 </body>
 </html>`);
     return;
@@ -49,6 +56,7 @@ rootRouter.get("/", (req, res) => {
     links: {
       health: "/health",
       agentApi: "/api/agent",
+      agentBaseUrl,
     },
   });
 });

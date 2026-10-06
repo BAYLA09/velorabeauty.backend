@@ -17,8 +17,17 @@ export function createApp() {
   app.use(helmet());
   app.use(express.json({ limit: "1mb" }));
 
+  app.set("trust proxy", 1);
+
   app.use(rootRouter);
   app.use(healthRouter);
+  app.use("/api/customers", customersRouter);
+  app.use("/api/checkouts", checkoutsRouter);
+  app.use("/api/orders", ordersRouter);
+  app.use("/api/support", supportRouter);
+  app.use("/api/unsubscribe", unsubscribeRouter);
+  app.use("/api/agent", agentRouter);
+  app.use("/api/admin", adminRouter);
 
   app.use((_req, res) => {
     res.status(404).json({
@@ -27,13 +36,6 @@ export function createApp() {
       hint: "Try GET / or GET /health",
     });
   });
-  app.use("/api/customers", customersRouter);
-  app.use("/api/checkouts", checkoutsRouter);
-  app.use("/api/orders", ordersRouter);
-  app.use("/api/support", supportRouter);
-  app.use("/api/unsubscribe", unsubscribeRouter);
-  app.use("/api/agent", agentRouter);
-  app.use("/api/admin", adminRouter);
 
   app.use(errorHandler);
   return app;
