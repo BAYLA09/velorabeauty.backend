@@ -206,7 +206,9 @@ Full email history (inbound + outbound).
 
 ### GET `/checkouts/abandoned`
 
-Eligible abandoned carts for follow-up (consent, not unsubscribed, cooldown, no recent duplicate abandoned email).
+Eligible abandoned carts for follow-up (consent, not unsubscribed, not suppressed, frequency cap, no recent duplicate abandoned email, sequence timing).
+
+Calling this route first sweeps ACTIVE checkouts whose last upsert is older than `CHECKOUT_ABANDON_AFTER_MINUTES` (default 30) and marks them ABANDONED. `abandonedAt` is that quiet-period instant, not the time of the poll. Message 1 is still gated by `ABANDONED_CHECKOUT_MIN_AGE_MINUTES` and `ABANDONED_CHECKOUT_DELAY_MINUTES` (both default 30), so the first email is eligible about 60 minutes after the last checkout upsert. Recovered checkouts are excluded, which stops the rest of the sequence.
 
 **Response `200`:**
 

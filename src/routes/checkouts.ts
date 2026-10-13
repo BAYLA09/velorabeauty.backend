@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireStoreAuth } from "../middleware/auth.js";
 import {
+  abandonStaleCheckouts,
   createCheckout,
   markCheckoutAbandoned,
   markCheckoutRecovered,
@@ -27,11 +28,20 @@ checkoutsRouter.post("/", requireStoreAuth, async (req, res, next) => {
   try {
     const body = checkoutBodySchema.parse(req.body);
     const { cartData, ...rest } = body;
-    const checkout = await createCheckout({
+    const result = await createCheckout({
       ...rest,
       cartData: cartData as Prisma.InputJsonValue,
     });
-    res.status(201).json({ checkout });
+    res.status(result.created ? 201 : 200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+checkoutsRouter.post("/abandon-stale", requireStoreAuth, async (_req, res, next) => {
+  try {
+    const result = await abandonStaleCheckouts();
+    res.json(result);
   } catch (err) {
     next(err);
   }

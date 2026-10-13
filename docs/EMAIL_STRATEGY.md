@@ -11,7 +11,7 @@
 
 ## Lifecycle programs (infrastructure ready)
 
-- **Abandoned checkout** — 3-step sequence (30m / 24h / 48h defaults, env-configurable)
+- **Abandoned checkout** — backend marks a quiet cart ABANDONED after `CHECKOUT_ABANDON_AFTER_MINUTES` (default 30). The 3-step sequence is then 30m / 24h / 48h after `abandonedAt` (env-configurable). A paid order, or `POST /api/checkouts/:id/recover`, stops the sequence.
 - **Welcome / post-purchase / review / win-back** — use `EmailCampaign` types + segments
 - **Support** — inbound webhook → tickets → Grok reply API
 

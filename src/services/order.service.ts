@@ -1,9 +1,11 @@
-import { CheckoutStatus, CustomerEventType } from "@prisma/client";
+import { CustomerEventType, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../middleware/errorHandler.js";
+import { isPaidOrderStatus } from "../lib/order-status.js";
 import { upsertCustomer } from "./customer.service.js";
 import { refreshCustomerStats } from "./customer-stats.service.js";
 import { recordCustomerEvent } from "./customer-event.service.js";
+import { recoverCheckoutsForPaidOrder } from "./checkout.service.js";
 
 export type CreateOrderInput = {
   email: string;
@@ -27,57 +29,57 @@ export async function createOrder(input: CreateOrderInput) {
     country: input.country,
   });
 
-  const order = await prisma.order.upsert({
+  const existing = await prisma.order.findUnique({
     where: { externalOrderId: input.externalOrderId },
-    create: {
-      customerId: customer.id,
-      externalOrderId: input.externalOrderId,
-      totalAmount: input.totalAmount,
-      currency: input.currency.toUpperCase(),
-      status: input.status,
-    },
-    update: {
-      totalAmount: input.totalAmount,
-      currency: input.currency.toUpperCase(),
-      status: input.status,
-    },
   });
+  const wasPaid = existing ? isPaidOrderStatus(existing.status) : false;
+  const nowPaid = isPaidOrderStatus(input.status);
+  const externalCheckoutId = input.externalCheckoutId ?? existing?.externalCheckoutId ?? undefined;
 
-  if (input.externalCheckoutId) {
-    const checkout = await prisma.checkout.findUnique({
-      where: { externalCheckoutId: input.externalCheckoutId },
-    });
-    if (checkout) {
-      await prisma.checkout.update({
-        where: { id: checkout.id },
-        data: {
-          status: CheckoutStatus.RECOVERED,
-          recoveredAt: new Date(),
-        },
-      });
-    }
-  } else {
-    await prisma.checkout.updateMany({
-      where: {
+  let order;
+  try {
+    order = await prisma.order.upsert({
+      where: { externalOrderId: input.externalOrderId },
+      create: {
         customerId: customer.id,
-        status: { in: [CheckoutStatus.ACTIVE, CheckoutStatus.ABANDONED] },
+        externalOrderId: input.externalOrderId,
+        externalCheckoutId: input.externalCheckoutId,
+        totalAmount: input.totalAmount,
+        currency: input.currency.toUpperCase(),
+        status: input.status,
       },
-      data: {
-        status: CheckoutStatus.RECOVERED,
-        recoveredAt: new Date(),
+      update: {
+        totalAmount: input.totalAmount,
+        currency: input.currency.toUpperCase(),
+        status: input.status,
+        ...(input.externalCheckoutId ? { externalCheckoutId: input.externalCheckoutId } : {}),
       },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new HttpError(
+        409,
+        "externalCheckoutId is already linked to another order",
+        "CHECKOUT_ALREADY_LINKED",
+      );
+    }
+    throw err;
+  }
+
+  if (nowPaid) {
+    await recoverCheckoutsForPaidOrder({
+      customerId: customer.id,
+      externalCheckoutId,
     });
   }
 
-  const eventType =
-    input.status.toLowerCase() === "paid"
-      ? CustomerEventType.ORDER_PAID
-      : CustomerEventType.ORDER_CREATED;
-  await recordCustomerEvent({
-    customerId: customer.id,
-    type: eventType,
-    metadata: { externalOrderId: order.externalOrderId, totalAmount: input.totalAmount },
-  });
+  if (!existing || (nowPaid && !wasPaid)) {
+    await recordCustomerEvent({
+      customerId: customer.id,
+      type: nowPaid ? CustomerEventType.ORDER_PAID : CustomerEventType.ORDER_CREATED,
+      metadata: { externalOrderId: order.externalOrderId, totalAmount: input.totalAmount },
+    });
+  }
   await refreshCustomerStats(customer.id);
 
   return order;

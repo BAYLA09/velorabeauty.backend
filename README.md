@@ -29,6 +29,7 @@ STORE → BACKEND → POSTGRESQL → Customer 360
 | [docs/GROK_SYSTEM_PROMPT.md](docs/GROK_SYSTEM_PROMPT.md) | System prompt template |
 | [docs/EMAIL_DELIVERABILITY.md](docs/EMAIL_DELIVERABILITY.md) | SPF/DKIM/DMARC + SendGrid |
 | [docs/EMAIL_STRATEGY.md](docs/EMAIL_STRATEGY.md) | Strategy split Grok vs backend |
+| [docs/STOREFRONT_CHECKOUT_CONTRACT.md](docs/STOREFRONT_CHECKOUT_CONTRACT.md) | Storefront abandoned-checkout API contract |
 
 ## Commands
 

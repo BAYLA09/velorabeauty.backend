@@ -40,7 +40,20 @@ ABANDONED_CHECKOUT_DELAY_MINUTES=30
 WINBACK_DAYS=60
 ```
 
-Optional: `ABANDONED_CHECKOUT_MESSAGE2_HOURS`, `ABANDONED_CHECKOUT_MESSAGE3_HOURS`, `VIP_MIN_TOTAL_SPENT`, rate limits — see `.env.example`.
+Optional: `ABANDONED_CHECKOUT_MESSAGE2_HOURS`, `ABANDONED_CHECKOUT_MESSAGE3_HOURS`, `CHECKOUT_ABANDON_AFTER_MINUTES` (default 30), `VIP_MIN_TOTAL_SPENT`, rate limits — see `.env.example`.
+
+`EMAIL_PROVIDER=console` logs sends and does not deliver. `EMAIL_PROVIDER=smtp` needs `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASSWORD` (see [EMAIL_DELIVERABILITY.md](./EMAIL_DELIVERABILITY.md)). Do not point production at SMTP or a new SendGrid key until domain authentication is verified.
+
+## Abandoned checkout sweep
+
+`GET /api/agent/checkouts/abandoned` marks quiet ACTIVE checkouts abandoned before it lists them. An optional scheduler can do the same between polls:
+
+```bash
+curl -sS -X POST "https://YOUR_HOST/api/checkouts/abandon-stale" \
+  -H "Authorization: Bearer $STORE_API_KEY"
+```
+
+Use the store key, not the Grok key. Overlapping calls are safe. See [STOREFRONT_CHECKOUT_CONTRACT.md](./STOREFRONT_CHECKOUT_CONTRACT.md).
 
 ## What Grok receives
 
