@@ -184,6 +184,16 @@ Do not reimplement these in the storefront. They are checked on every marketing 
 
 `20261013143000_order_external_checkout_id` adds nullable unique `orders.externalCheckoutId`. Existing rows stay null. The container entrypoint already runs `prisma migrate deploy` before listen. No backfill. Deploy the migration with the code. Do not apply it by hand to production outside the normal release.
 
+## Deployment order
+
+Deploy **this backend PR before** (or in the same release as) storefront PR #129.
+
+On current backend `main`, **any** `POST /api/orders` recovers open checkouts for that customer or `externalCheckoutId`, including `status: "pending"` and `"awaiting_payment"`. The storefront sends `awaiting_payment` when a card order is saved but not paid. If the new frontend reaches production first, abandonment mail for card shoppers stops before Stripe marks the order paid.
+
+After this backend ships, only paid statuses recover a checkout. Cash on delivery still needs `POST /api/checkouts/:id/recover` after `status: "pending"`.
+
+If the storefront ships before this migration runs on the API host, `POST /api/orders` with `externalCheckoutId` can fail at runtime on the new code path. Run `prisma migrate deploy` with the backend release.
+
 ## Staging test (owner address only)
 
 Use `baylaamine@gmail.com` and `EMAIL_PROVIDER=console` first. Do not switch to SendGrid or SMTP, and do not use any other recipient, until console logs show the sequence and a paid order removes the checkout from the agent list. Shorten the timers only on that staging process:
