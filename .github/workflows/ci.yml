@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      GROK_AGENT_API_KEY: test-grok-agent-key-32chars!
+      STORE_API_KEY: test-store-api-key-32chars!!
+      EMAIL_FROM: ci@example.com
+      EMAIL_REPLY_TO: ci@example.com
+      EMAIL_PROVIDER: console
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Typecheck
+        run: npm run build
+
+      - name: Test
+        run: npm test

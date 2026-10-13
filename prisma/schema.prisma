@@ -88,14 +88,16 @@ model CustomerEvent {
 }
 
 model Order {
-  id              String   @id @default(cuid())
-  customerId      String
-  externalOrderId String   @unique
-  totalAmount     Decimal  @db.Decimal(12, 2)
-  currency        String   @db.VarChar(3)
-  status          String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  customerId         String
+  externalOrderId    String   @unique
+  /// Storefront checkout key (same value as Checkout.externalCheckoutId). Persisted so a paid order can recover the checkout even if the order is recorded first.
+  externalCheckoutId String?  @unique
+  totalAmount        Decimal  @db.Decimal(12, 2)
+  currency           String   @db.VarChar(3)
+  status             String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
