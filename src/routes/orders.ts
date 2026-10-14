@@ -2,7 +2,6 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireStoreAuth } from "../middleware/auth.js";
 import { createOrder } from "../services/order.service.js";
-import { isCodSheetsConfigured } from "../services/google-sheets-cod.service.js";
 
 export const ordersRouter = Router();
 
@@ -37,11 +36,8 @@ const orderBodySchema = z.object({
 ordersRouter.post("/", requireStoreAuth, async (req, res, next) => {
   try {
     const body = orderBodySchema.parse(req.body);
-    const order = await createOrder(body);
-    res.status(201).json({
-      order,
-      codSheetSync: isCodSheetsConfigured() ? "queued" : "disabled",
-    });
+    const result = await createOrder(body);
+    res.status(201).json(result);
   } catch (err) {
     next(err);
   }

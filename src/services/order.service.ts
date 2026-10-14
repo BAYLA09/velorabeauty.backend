@@ -1,8 +1,12 @@
-import { CheckoutStatus } from "@prisma/client";
+import { CheckoutStatus, type Order } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { HttpError } from "../middleware/errorHandler.js";
 import { upsertCustomer } from "./customer.service.js";
-import { appendCodOrderToSheet, isCodSheetsConfigured } from "./google-sheets-cod.service.js";
+import {
+  appendCodOrderToSheet,
+  getSheetsConfigStatus,
+  isCodSheetsConfigured,
+} from "./google-sheets-cod.service.js";
 import { logStructured } from "../lib/logger.js";
 
 export type CreateOrderInput = {
@@ -33,6 +37,17 @@ export type CreateOrderInput = {
   utmContent?: string;
 };
 
+export type CodSheetSyncResult =
+  | { status: "disabled"; reason: string }
+  | { status: "skipped"; reason: string }
+  | { status: "synced"; tabName: string }
+  | { status: "failed"; error: string };
+
+export type CreateOrderResult = {
+  order: Order;
+  codSheet: CodSheetSyncResult;
+};
+
 function isCodOrder(input: CreateOrderInput): boolean {
   const method = (input.paymentMethod ?? "cod").toLowerCase();
   return method === "cod" || method === "cash_on_delivery";
@@ -43,7 +58,7 @@ function displayName(input: CreateOrderInput): string {
   return [input.firstName, input.lastName].filter(Boolean).join(" ").trim();
 }
 
-export async function createOrder(input: CreateOrderInput) {
+export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
   const existing = await prisma.order.findUnique({
     where: { externalOrderId: input.externalOrderId },
   });
@@ -98,9 +113,33 @@ export async function createOrder(input: CreateOrderInput) {
     });
   }
 
-  const isNewOrder = !existing;
-  if (isNewOrder && isCodOrder(input) && isCodSheetsConfigured()) {
-    void appendCodOrderToSheet({
+  const codSheet = await syncCodOrderToSheet(input, !existing);
+
+  return { order, codSheet };
+}
+
+async function syncCodOrderToSheet(
+  input: CreateOrderInput,
+  isNewOrder: boolean,
+): Promise<CodSheetSyncResult> {
+  if (!isCodSheetsConfigured()) {
+    const status = getSheetsConfigStatus();
+    return {
+      status: "disabled",
+      reason: `Missing env: ${status.missing.join(", ") || "unknown"}`,
+    };
+  }
+
+  if (!isNewOrder) {
+    return { status: "skipped", reason: "Order already exists (no duplicate sheet row)" };
+  }
+
+  if (!isCodOrder(input)) {
+    return { status: "skipped", reason: "Not a COD order (paymentMethod)" };
+  }
+
+  try {
+    const result = await appendCodOrderToSheet({
       orderDate: input.orderDate ?? new Date().toISOString(),
       country: input.country ?? "",
       name: displayName(input),
@@ -118,15 +157,16 @@ export async function createOrder(input: CreateOrderInput) {
       utmCampaign: input.utmCampaign ?? "",
       utmTerm: input.utmTerm ?? "",
       utmContent: input.utmContent ?? "",
-    }).catch((err) => {
-      logStructured("error", "google_sheets_cod_failed", {
-        externalOrderId: input.externalOrderId,
-        message: err instanceof Error ? err.message : "unknown",
-      });
     });
+    return { status: "synced", tabName: result.tabName };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : "Google Sheets append failed";
+    logStructured("error", "google_sheets_cod_failed", {
+      externalOrderId: input.externalOrderId,
+      message: error,
+    });
+    return { status: "failed", error };
   }
-
-  return order;
 }
 
 export async function listOrdersForCustomer(customerId: string) {

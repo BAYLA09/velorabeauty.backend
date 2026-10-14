@@ -10,7 +10,7 @@ Your spreadsheet ID (from the URL):
 
 `1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ`
 
-Tab name: **Sheet1** (or set `GOOGLE_SHEETS_TAB_NAME`).
+Tab: use **`GOOGLE_SHEETS_GID=469291840`** (from your sheet URL) — backend resolves the correct tab name automatically.
 
 ## 1. Google Cloud service account
 
@@ -29,10 +29,22 @@ Open the Google Sheet → **Share** → add the service account email
 | Variable | Value |
 | --- | --- |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | `1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ` |
-| `GOOGLE_SHEETS_TAB_NAME` | `Sheet1` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Full JSON on **one line** (paste entire key file) |
+| `GOOGLE_SHEETS_GID` | `469291840` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | Full JSON on **one line**, **or** use `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` |
 
 Redeploy backend.
+
+### Test (after deploy)
+
+```bash
+curl -sS -X POST "https://api.velorabeauty.world/api/admin/sheets/cod/test" \
+  -H "Authorization: Bearer STORE_API_KEY"
+
+curl -sS -X POST "https://api.velorabeauty.world/api/admin/sheets/cod/test-row" \
+  -H "Authorization: Bearer STORE_API_KEY"
+```
+
+First command checks auth + tab. Second adds one **TEST** row to the sheet.
 
 ## 4. Store / COD app request
 
@@ -64,6 +76,12 @@ Example body:
 ```
 
 Default `paymentMethod` is treated as **cod**. Orders already in DB (same `externalOrderId`) are **not** duplicated in the sheet.
+
+The API response includes **`codSheet`**:
+
+- `{ "status": "synced", "tabName": "..." }` — row added  
+- `{ "status": "failed", "error": "..." }` — read the error (share sheet, bad JSON, wrong gid)  
+- `{ "status": "disabled", "reason": "..." }` — env vars missing on server  
 
 ## Troubleshooting
 

@@ -8,6 +8,11 @@ import { toSafeCustomer } from "../../services/customer.service.js";
 import { listEmailHistory } from "../../services/email.service.js";
 import { updateCampaignStatus, getCampaign } from "../../services/campaign.service.js";
 import { getCustomerById } from "../../services/customer.service.js";
+import {
+  getSheetsConfigStatus,
+  testCodSheetConnection,
+  appendCodOrderToSheet,
+} from "../../services/google-sheets-cod.service.js";
 
 export const adminRouter = Router();
 
@@ -122,6 +127,49 @@ adminRouter.get("/unsubscribes", async (_req, res, next) => {
 adminRouter.get("/campaigns/:id", async (req, res, next) => {
   try {
     res.json({ campaign: await getCampaign(req.params.id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get("/sheets/cod/status", (_req, res) => {
+  res.json(getSheetsConfigStatus());
+});
+
+adminRouter.post("/sheets/cod/test", async (_req, res, next) => {
+  try {
+    const connection = await testCodSheetConnection();
+    res.json({
+      ...connection,
+      hint: "Share the Google Sheet with this service account email as Editor",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/sheets/cod/test-row", async (_req, res, next) => {
+  try {
+    const result = await appendCodOrderToSheet({
+      orderDate: new Date().toISOString(),
+      country: "TEST",
+      name: "EasyPanel connection test",
+      phone: "000",
+      address: "test",
+      url: "",
+      sku: "TEST",
+      product: "TEST",
+      quantity: "1",
+      price: "0",
+      currency: "AED",
+      notes: "Delete this row — backend sheet test",
+      utmSource: "",
+      utmMedium: "",
+      utmCampaign: "",
+      utmTerm: "",
+      utmContent: "",
+    });
+    res.json({ ok: true, tabName: result.tabName });
   } catch (err) {
     next(err);
   }
