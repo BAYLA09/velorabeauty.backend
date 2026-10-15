@@ -12,10 +12,11 @@ ordersRouter.get("/", (_req, res) => {
     auth: "Authorization: Bearer STORE_API_KEY",
     description: "Create a COD/card order. New COD orders sync to Google Sheets when configured.",
     codSheetEnv: [
-      "GOOGLE_SHEETS_SPREADSHEET_ID",
-      "GOOGLE_SHEETS_GID",
-      "GOOGLE_SERVICE_ACCOUNT_JSON",
+      "ORDERS_SHEETS_COD_WEBHOOK_URL",
+      "ORDERS_SHEETS_WEBHOOK_SECRET",
+      "SHEET_GID",
     ],
+    codSheetEnvAlt: ["GOOGLE_SERVICE_ACCOUNT_JSON", "GOOGLE_SHEETS_SPREADSHEET_ID"],
     docs: "https://github.com/BAYLA09/velorabeauty.backend/blob/main/docs/GOOGLE_SHEETS_COD.md",
   });
 });

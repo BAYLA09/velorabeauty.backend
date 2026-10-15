@@ -13,6 +13,11 @@ import {
   testCodSheetConnection,
   appendCodOrderToSheet,
 } from "../../services/google-sheets-cod.service.js";
+import {
+  appendCodOrderViaAppsScriptWebhook,
+  getAppsScriptWebhookConfig,
+  isAppsScriptWebhookConfigured,
+} from "../../services/cod-sheet-webhook.service.js";
 
 export const adminRouter = Router();
 
@@ -133,7 +138,20 @@ adminRouter.get("/campaigns/:id", async (req, res, next) => {
 });
 
 adminRouter.get("/sheets/cod/status", (_req, res) => {
-  res.json(getSheetsConfigStatus());
+  res.json({
+    appsScriptWebhook: {
+      configured: isAppsScriptWebhookConfigured(),
+      urlSet: Boolean(process.env.ORDERS_SHEETS_COD_WEBHOOK_URL?.trim()),
+      secretSet: Boolean(process.env.ORDERS_SHEETS_WEBHOOK_SECRET?.trim()),
+      gid: getAppsScriptWebhookConfig()?.gid,
+    },
+    googleServiceAccount: getSheetsConfigStatus(),
+    activeChannel: isAppsScriptWebhookConfigured()
+      ? "apps_script"
+      : getSheetsConfigStatus().configured
+        ? "google_api"
+        : "none",
+  });
 });
 
 adminRouter.post("/sheets/cod/test", async (_req, res, next) => {
@@ -150,7 +168,7 @@ adminRouter.post("/sheets/cod/test", async (_req, res, next) => {
 
 adminRouter.post("/sheets/cod/test-row", async (_req, res, next) => {
   try {
-    const result = await appendCodOrderToSheet({
+    const testRow = {
       orderDate: new Date().toISOString(),
       country: "TEST",
       name: "EasyPanel connection test",
@@ -168,8 +186,16 @@ adminRouter.post("/sheets/cod/test-row", async (_req, res, next) => {
       utmCampaign: "",
       utmTerm: "",
       utmContent: "",
-    });
-    res.json({ ok: true, tabName: result.tabName });
+    };
+
+    if (isAppsScriptWebhookConfigured()) {
+      await appendCodOrderViaAppsScriptWebhook(testRow);
+      res.json({ ok: true, channel: "apps_script", gid: getAppsScriptWebhookConfig()?.gid });
+      return;
+    }
+
+    const result = await appendCodOrderToSheet(testRow);
+    res.json({ ok: true, channel: "google_api", tabName: result.tabName });
   } catch (err) {
     next(err);
   }

@@ -7,6 +7,11 @@ import {
   getSheetsConfigStatus,
   isCodSheetsConfigured,
 } from "./google-sheets-cod.service.js";
+import {
+  appendCodOrderViaAppsScriptWebhook,
+  getAppsScriptWebhookConfig,
+  isAppsScriptWebhookConfigured,
+} from "./cod-sheet-webhook.service.js";
 import { logStructured } from "../lib/logger.js";
 
 export type CreateOrderInput = {
@@ -40,8 +45,12 @@ export type CreateOrderInput = {
 export type CodSheetSyncResult =
   | { status: "disabled"; reason: string }
   | { status: "skipped"; reason: string }
-  | { status: "synced"; tabName: string }
-  | { status: "failed"; error: string };
+  | { status: "synced"; channel: "apps_script" | "google_api"; tabName?: string }
+  | { status: "failed"; channel?: "apps_script" | "google_api"; error: string };
+
+function isCodSheetDeliveryConfigured(): boolean {
+  return isAppsScriptWebhookConfigured() || isCodSheetsConfigured();
+}
 
 export type CreateOrderResult = {
   order: Order;
@@ -118,15 +127,39 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   return { order, codSheet };
 }
 
+function buildCodSheetRow(input: CreateOrderInput) {
+  return {
+    orderDate: input.orderDate ?? new Date().toISOString(),
+    country: input.country ?? "",
+    name: displayName(input),
+    phone: input.phone ?? "",
+    address: input.address ?? "",
+    url: input.url ?? "",
+    sku: input.sku ?? "",
+    product: input.product ?? "",
+    quantity: String(input.quantity ?? 1),
+    price: String(input.price ?? input.totalAmount),
+    currency: input.currency.toUpperCase(),
+    notes: input.notes ?? input.externalOrderId,
+    utmSource: input.utmSource ?? "",
+    utmMedium: input.utmMedium ?? "",
+    utmCampaign: input.utmCampaign ?? "",
+    utmTerm: input.utmTerm ?? "",
+    utmContent: input.utmContent ?? "",
+  };
+}
+
 async function syncCodOrderToSheet(
   input: CreateOrderInput,
   isNewOrder: boolean,
 ): Promise<CodSheetSyncResult> {
-  if (!isCodSheetsConfigured()) {
+  if (!isCodSheetDeliveryConfigured()) {
     const status = getSheetsConfigStatus();
     return {
       status: "disabled",
-      reason: `Missing env: ${status.missing.join(", ") || "unknown"}`,
+      reason:
+        "Configure Apps Script webhook (ORDERS_SHEETS_COD_WEBHOOK_URL + ORDERS_SHEETS_WEBHOOK_SECRET) " +
+        `or Google service account. Missing: ${status.missing.join(", ") || "webhook vars"}`,
     };
   }
 
@@ -138,34 +171,33 @@ async function syncCodOrderToSheet(
     return { status: "skipped", reason: "Not a COD order (paymentMethod)" };
   }
 
+  const row = buildCodSheetRow(input);
+
+  if (isAppsScriptWebhookConfigured()) {
+    try {
+      await appendCodOrderViaAppsScriptWebhook(row);
+      const cfg = getAppsScriptWebhookConfig();
+      return { status: "synced", channel: "apps_script", tabName: `gid:${cfg?.gid}` };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "Apps Script webhook failed";
+      logStructured("error", "cod_sheet_webhook_failed", {
+        externalOrderId: input.externalOrderId,
+        message: error,
+      });
+      return { status: "failed", channel: "apps_script", error };
+    }
+  }
+
   try {
-    const result = await appendCodOrderToSheet({
-      orderDate: input.orderDate ?? new Date().toISOString(),
-      country: input.country ?? "",
-      name: displayName(input),
-      phone: input.phone ?? "",
-      address: input.address ?? "",
-      url: input.url ?? "",
-      sku: input.sku ?? "",
-      product: input.product ?? "",
-      quantity: String(input.quantity ?? 1),
-      price: String(input.price ?? input.totalAmount),
-      currency: input.currency.toUpperCase(),
-      notes: input.notes ?? input.externalOrderId,
-      utmSource: input.utmSource ?? "",
-      utmMedium: input.utmMedium ?? "",
-      utmCampaign: input.utmCampaign ?? "",
-      utmTerm: input.utmTerm ?? "",
-      utmContent: input.utmContent ?? "",
-    });
-    return { status: "synced", tabName: result.tabName };
+    const result = await appendCodOrderToSheet(row);
+    return { status: "synced", channel: "google_api", tabName: result.tabName };
   } catch (err) {
     const error = err instanceof Error ? err.message : "Google Sheets append failed";
     logStructured("error", "google_sheets_cod_failed", {
       externalOrderId: input.externalOrderId,
       message: error,
     });
-    return { status: "failed", error };
+    return { status: "failed", channel: "google_api", error };
   }
 }
 

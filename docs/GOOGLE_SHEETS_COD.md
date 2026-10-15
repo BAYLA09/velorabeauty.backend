@@ -1,90 +1,52 @@
 # COD orders → Google Sheet
 
-When a **new** COD order hits `POST /api/orders`, the backend appends one row to your sheet.
+When a **new** COD order is saved via `POST /api/orders`, the backend forwards it to your sheet.
 
-## Sheet columns (A → Q)
+## Your setup (Apps Script webhook) — recommended
 
-`OrderDate`, `country`, `name`, `phone`, `address`, `url`, `sku`, `Product`, `quantity`, `price`, `currency`, `notes`, `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`
+You already use a Google Apps Script web app. Configure **EasyPanel → backend → Environment**:
 
-Your spreadsheet ID (from the URL):
-
-`1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ`
-
-Tab: use **`GOOGLE_SHEETS_GID=469291840`** (from your sheet URL) — backend resolves the correct tab name automatically.
-
-## 1. Google Cloud service account
-
-1. [Google Cloud Console](https://console.cloud.google.com/) → create/select project  
-2. Enable **Google Sheets API**  
-3. **IAM → Service Accounts** → Create → Keys → **JSON**  
-4. Copy the JSON file contents (keep secret)
-
-## 2. Share the sheet
-
-Open the Google Sheet → **Share** → add the service account email  
-(e.g. `something@project-id.iam.gserviceaccount.com`) as **Editor**.
-
-## 3. EasyPanel environment (backend)
-
-| Variable | Value |
+| Variable | Description |
 | --- | --- |
-| `GOOGLE_SHEETS_SPREADSHEET_ID` | `1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ` |
-| `GOOGLE_SHEETS_GID` | `469291840` |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Full JSON on **one line**, **or** use `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64` |
+| `ORDERS_SHEETS_COD_WEBHOOK_URL` | `https://script.google.com/macros/s/.../exec` |
+| `ORDERS_SHEETS_WEBHOOK_SECRET` | Same secret as in Apps Script (`VeloraCOD-...`) |
+| `SHEET_GID` | `469291840` (from sheet URL `#gid=469291840`) |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | Optional; `1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ` |
 
-Redeploy backend.
+**You do NOT need `GOOGLE_SERVICE_ACCOUNT_JSON`** if the webhook is configured.
 
-### Test (after deploy)
+Redeploy backend after saving env vars.
+
+### Test
 
 ```bash
-curl -sS -X POST "https://api.velorabeauty.world/api/admin/sheets/cod/test" \
-  -H "Authorization: Bearer STORE_API_KEY"
-
 curl -sS -X POST "https://api.velorabeauty.world/api/admin/sheets/cod/test-row" \
   -H "Authorization: Bearer STORE_API_KEY"
 ```
 
-First command checks auth + tab. Second adds one **TEST** row to the sheet.
+Check the sheet for a **TEST** row.
 
-## 4. Store / COD app request
+### Store must call the backend
 
-`POST https://api.velorabeauty.world/api/orders`  
-Header: `Authorization: Bearer STORE_API_KEY`
+Opening `/api/orders` in a browser does **nothing**. The storefront/COD flow must send:
 
-Example body:
-
-```json
-{
-  "email": "customer@example.com",
-  "name": "Sara Ali",
-  "phone": "+971501234567",
-  "country": "UAE",
-  "address": "Dubai Marina, Tower 1",
-  "externalOrderId": "COD-10042",
-  "totalAmount": 199,
-  "currency": "AED",
-  "status": "pending_cod",
-  "paymentMethod": "cod",
-  "product": "Velora Serum",
-  "sku": "VS-001",
-  "quantity": 1,
-  "price": 199,
-  "url": "https://velorabeauty.world/checkout",
-  "utmSource": "instagram",
-  "notes": "COD UAE"
-}
+```http
+POST https://api.velorabeauty.world/api/orders
+Authorization: Bearer STORE_API_KEY
 ```
 
-Default `paymentMethod` is treated as **cod**. Orders already in DB (same `externalOrderId`) are **not** duplicated in the sheet.
+Response includes `codSheet.status` (`synced` | `failed` | `disabled`).
 
-The API response includes **`codSheet`**:
+---
 
-- `{ "status": "synced", "tabName": "..." }` — row added  
-- `{ "status": "failed", "error": "..." }` — read the error (share sheet, bad JSON, wrong gid)  
-- `{ "status": "disabled", "reason": "..." }` — env vars missing on server  
+## Alternative: Google Service Account (no Apps Script)
 
-## Troubleshooting
+See env vars `GOOGLE_SERVICE_ACCOUNT_JSON` in `.env.example`. Used only if webhook URL is **not** set.
 
-- Row missing → check backend logs for `google_sheets_cod_failed`  
-- 403 → service account not shared on the sheet  
-- Wrong tab → fix `GOOGLE_SHEETS_TAB_NAME`
+---
+
+## Sheet columns
+
+`OrderDate`, `country`, `name`, `phone`, `address`, `url`, `sku`, `Product`, `quantity`, `price`, `currency`, `notes`, `utm_*`
+
+Spreadsheet: [Orders VeloraBeauty COD UAE](https://docs.google.com/spreadsheets/d/1nasdcXYD5ihxj5QnGMWQ05ug3VqoVfgP8R9ojBnsjXQ/edit?gid=469291840)
