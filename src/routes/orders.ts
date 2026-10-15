@@ -5,6 +5,21 @@ import { createOrder } from "../services/order.service.js";
 
 export const ordersRouter = Router();
 
+ordersRouter.get("/", (_req, res) => {
+  res.json({
+    ok: true,
+    endpoint: "POST /api/orders",
+    auth: "Authorization: Bearer STORE_API_KEY",
+    description: "Create a COD/card order. New COD orders sync to Google Sheets when configured.",
+    codSheetEnv: [
+      "GOOGLE_SHEETS_SPREADSHEET_ID",
+      "GOOGLE_SHEETS_GID",
+      "GOOGLE_SERVICE_ACCOUNT_JSON",
+    ],
+    docs: "https://github.com/BAYLA09/velorabeauty.backend/blob/main/docs/GOOGLE_SHEETS_COD.md",
+  });
+});
+
 const orderBodySchema = z.object({
   email: z.string().min(3),
   firstName: z.string().optional(),
