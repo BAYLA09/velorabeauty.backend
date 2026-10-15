@@ -72,6 +72,10 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     where: { externalOrderId: input.externalOrderId },
   });
 
+  const isNewOrder = !existing;
+  // Start sheet push immediately (parallel with DB) so the row lands without waiting on checkout updates.
+  const codSheetPromise = syncCodOrderToSheet(input, isNewOrder);
+
   const customer = await upsertCustomer({
     email: input.email,
     firstName: input.firstName,
@@ -122,7 +126,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     });
   }
 
-  const codSheet = await syncCodOrderToSheet(input, !existing);
+  const codSheet = await codSheetPromise;
 
   return { order, codSheet };
 }
