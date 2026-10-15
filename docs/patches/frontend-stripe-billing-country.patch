@@ -1,0 +1,78 @@
+From ec47285be6d3533851dc6e69d5f5001c089664d2 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Thu, 15 Oct 2026 17:51:24 +0000
+Subject: [PATCH] Pass billing address.country on Stripe confirmPayment
+ (Payment Element address never)
+
+---
+ src/components/checkout/CheckoutCardStripeCheckout.tsx |  5 +++++
+ .../checkout/CheckoutCardVanillaCheckout.tsx           |  5 +++++
+ src/lib/checkout/submitAndConfirmStripePayment.ts      | 10 ++++++++--
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/src/components/checkout/CheckoutCardStripeCheckout.tsx b/src/components/checkout/CheckoutCardStripeCheckout.tsx
+index 42ecb8b..fc8463c 100644
+--- a/src/components/checkout/CheckoutCardStripeCheckout.tsx
++++ b/src/components/checkout/CheckoutCardStripeCheckout.tsx
+@@ -286,6 +286,11 @@ function StripeCardPaymentAndSubmit({
+           name: trimmedName,
+           email: form.email.trim() || undefined,
+           phone: phoneCheck.normalized,
++          address: {
++            country: "AE",
++            line1: fullAddress,
++            state: form.emirate,
++          },
+         },
+       });
+       if (!payment.ok) {
+diff --git a/src/components/checkout/CheckoutCardVanillaCheckout.tsx b/src/components/checkout/CheckoutCardVanillaCheckout.tsx
+index 26a7434..7ffb366 100644
+--- a/src/components/checkout/CheckoutCardVanillaCheckout.tsx
++++ b/src/components/checkout/CheckoutCardVanillaCheckout.tsx
+@@ -230,6 +230,11 @@ export function CheckoutCardVanillaCheckout({
+           name: trimmedName,
+           email: email.trim() || undefined,
+           phone: phoneCheck.normalized,
++          address: {
++            country: "AE",
++            line1: fullAddress,
++            state: emirate,
++          },
+         },
+       });
+       if (!payment.ok) {
+diff --git a/src/lib/checkout/submitAndConfirmStripePayment.ts b/src/lib/checkout/submitAndConfirmStripePayment.ts
+index e40fa50..cd78703 100644
+--- a/src/lib/checkout/submitAndConfirmStripePayment.ts
++++ b/src/lib/checkout/submitAndConfirmStripePayment.ts
+@@ -1,10 +1,16 @@
+ import type { Stripe, StripeElements } from "@stripe/stripe-js";
+ import { formatCheckoutPayError } from "@/lib/checkout/formatCheckoutPayError";
+ 
+-export type StripeBillingDetails = {
++/** Shown in Velora form; Payment Element uses `fields.billingDetails.address: "never"`. */
++export type StripeConfirmBillingDetails = {
+   name: string;
+   email?: string;
+   phone?: string;
++  address: {
++    country: string;
++    line1?: string;
++    state?: string;
++  };
+ };
+ 
+ /** Payment Element requires `elements.submit()` before `confirmPayment` (Stripe.js). */
+@@ -13,7 +19,7 @@ export async function submitAndConfirmStripePayment(
+   elements: StripeElements,
+   input: {
+     returnUrl: string;
+-    billingDetails: StripeBillingDetails;
++    billingDetails: StripeConfirmBillingDetails;
+   },
+ ): Promise<{ ok: true } | { ok: false; message: string }> {
+   try {
+-- 
+2.43.0
+

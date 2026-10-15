@@ -14,13 +14,22 @@ Payment never completes (`confirmPayment` fails before charge).
 
 ## Fix (frontend)
 
-Apply in `velorabeauty.frontend`:
+Payment Element stays **`address: "never"`** (no UI change). On `confirmPayment`, pass delivery data from the existing form:
 
-1. Add `src/lib/checkout/buildStripeConfirmBillingDetails.ts` — builds `{ name, email, phone, address: { country: "AE", line1, state } }`.
-2. Use it in `CheckoutCardStripeCheckout.tsx` and `CheckoutCardVanillaCheckout.tsx` when calling `submitAndConfirmStripePayment`.
-3. Redeploy the **storefront** (not this API).
+```ts
+address: { country: "AE", line1: fullAddress, state: emirate }
+```
 
-UAE storefront default: `country: "AE"`, `line1` = delivery address, `state` = emirate.
+Files: `submitAndConfirmStripePayment.ts`, `CheckoutCardStripeCheckout.tsx`, `CheckoutCardVanillaCheckout.tsx`.
+
+Apply from this repo:
+
+```bash
+cd velorabeauty.frontend
+git apply ../velorabeauty.backend/docs/patches/frontend-stripe-billing-country.patch
+```
+
+Then redeploy the **storefront** only (no Stripe env changes).
 
 ## After deploy
 
