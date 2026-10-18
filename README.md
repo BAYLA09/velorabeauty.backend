@@ -50,3 +50,11 @@ npm run prisma:validate
 | `STORE_API_KEY` | `/api/customers`, `/api/checkouts`, `/api/orders`, `/api/support`, `/api/admin` | Store + owner admin |
 | `GROK_AGENT_API_KEY` | `/api/agent` | Grok only |
 | Public | `/api/unsubscribe`, `/health` | Customers / monitors |
+
+## Marketing unsubscribe
+
+Marketing emails require a compliant unsubscribe path:
+
+- Set **`UNSUBSCRIBE_SECRET`** (at least 32 characters) and **`PUBLIC_API_BASE_URL`** (defaults to `https://api.velorabeauty.world`) so each message gets a signed `GET /api/unsubscribe?email=&token=` link plus RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers.
+- Legacy **`EMAIL_UNSUBSCRIBE_URL`** is still accepted when no secret is configured; when both are set, the signed link wins.
+- If neither is configured, marketing sends fail closed with code **`UNSUBSCRIBE_NOT_CONFIGURED`** (support emails are unaffected).
