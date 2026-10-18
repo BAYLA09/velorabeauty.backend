@@ -34,6 +34,12 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email(),
   EMAIL_REPLY_TO: z.string().email(),
   EMAIL_UNSUBSCRIBE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  /** HMAC secret for signed unsubscribe links (min 32 chars). Required for marketing sends when no legacy URL is set. */
+  UNSUBSCRIBE_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
+  PUBLIC_API_BASE_URL: z.preprocess(
+    emptyToUndefined,
+    z.string().url().default("https://api.velorabeauty.world"),
+  ),
   EMAIL_PROVIDER: z.enum(["console", "sendgrid", "smtp"]).default("console"),
   EMAIL_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   SMTP_HOST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),

@@ -15,6 +15,7 @@ import { checkEmailEligibility } from "./eligibility.service.js";
 import { recordCustomerEvent } from "./customer-event.service.js";
 import { logStructured } from "../lib/logger.js";
 import { isMarketingEmailType } from "../lib/email-rules.js";
+import { resolveMarketingUnsubscribeUrl } from "../lib/marketing-unsubscribe.js";
 
 export type AgentSendEmailInput = {
   customerId: string;
@@ -90,6 +91,25 @@ export async function validateAndSendAgentEmail(
   }
 
   const env = loadEnv();
+
+  let unsubscribeUrl: string | undefined;
+  if (isMarketingEmailType(input.type)) {
+    const resolved = resolveMarketingUnsubscribeUrl(recipientEmail, env);
+    if ("code" in resolved) {
+      logStructured("info", "email_send_blocked", {
+        customerId: customer.id,
+        code: resolved.code,
+        type: input.type,
+      });
+      return {
+        success: false,
+        reason: "Marketing unsubscribe is not configured",
+        code: resolved.code,
+      };
+    }
+    unsubscribeUrl = resolved.url;
+  }
+
   const queued = await prisma.emailMessage.create({
     data: {
       customerId: customer.id,
@@ -118,7 +138,7 @@ export async function validateAndSendAgentEmail(
       replyTo: env.EMAIL_REPLY_TO,
       subject: input.subject.trim(),
       body: input.body.trim(),
-      unsubscribeUrl: isMarketingEmailType(input.type) ? env.EMAIL_UNSUBSCRIBE_URL : undefined,
+      unsubscribeUrl,
     });
 
     const emailMessage = await prisma.emailMessage.update({

@@ -14,8 +14,18 @@ import { adminRouter } from "./routes/admin/index.js";
 export function createApp() {
   const app = express();
 
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+        },
+      },
+    }),
+  );
   app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ extended: false }));
 
   app.set("trust proxy", 1);
 
